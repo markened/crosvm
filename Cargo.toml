@@ -360,6 +360,9 @@ geniezone = ["devices/geniezone", "hypervisor/geniezone"]
 ## Enables the use of the Gunyah hypervisor
 gunyah = ["devices/gunyah", "hypervisor/gunyah"]
 
+## Enables the use of the apdvirt hypervisor
+apdvirt = ["devices/apdvirt", "hypervisor/apdvirt"]
+
 ## Enables the Linux trace_marker backend for cros_tracing. This backend is only
 ## supported on Linux systems. It sends all cros_tracing tracepoints to the tracefs
 ## filesystem if mounted, for easier debugging with tools like trace-cmd.
@@ -482,6 +485,7 @@ all-default = [
     "fs_runtime_ugid_map",
     "gdb",
     "geniezone",
+    "apdvirt",
     "gfxstream",
     "gfxstream_stub",
     "libvda-stub",
@@ -513,6 +517,7 @@ all-aarch64 = [
     "android_display",
     "android_display_stub",
     "gunyah",
+    "apdvirt",
     "libaaudio_stub",
 ]
 
@@ -577,6 +582,7 @@ all-android = [
     "gdbstub_arch",
     "geniezone",
     "gunyah",
+    "apdvirt",
     "libaaudio_stub",
     "net",
     "qcow",

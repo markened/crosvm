@@ -31,6 +31,11 @@ pub enum HypervisorKind {
     Geniezone {
         device: Option<PathBuf>,
     },
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    #[cfg(feature = "apdvirt")]
+    APDvirt {
+        device: Option<PathBuf>,
+    },
     #[cfg(all(any(target_arch = "arm", target_arch = "aarch64"), feature = "gunyah"))]
     Gunyah {
         device: Option<PathBuf>,
@@ -601,6 +606,48 @@ mod tests {
         assert_eq!(
             config.hypervisor,
             Some(HypervisorKind::Geniezone {
+                device: Some(PathBuf::from("/not/default"))
+            })
+        );
+    }
+
+    #[test]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    #[cfg(feature = "apdvirt")]
+    fn hypervisor_apdvirt() {
+        let config: Config = crate::crosvm::cmdline::RunCommand::from_args(
+            &[],
+            &["--hypervisor", "apdvirt", "/dev/null"],
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+        assert_eq!(
+            config.hypervisor,
+            Some(HypervisorKind::APDvirt { device: None })
+        );
+    }
+
+    #[test]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    #[cfg(feature = "apdvirt")]
+    fn hypervisor_apdvirt_device() {
+        let config: Config = crate::crosvm::cmdline::RunCommand::from_args(
+            &[],
+            &[
+                "--hypervisor",
+                "apdvirt[device=/not/default]",
+                "/dev/null",
+            ],
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+        assert_eq!(
+            config.hypervisor,
+            Some(HypervisorKind::APDvirt {
                 device: Some(PathBuf::from("/not/default"))
             })
         );

@@ -213,6 +213,9 @@ const KVM_PATH: &str = "/dev/kvm";
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 #[cfg(feature = "geniezone")]
 const GENIEZONE_PATH: &str = "/dev/gzvm";
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+#[cfg(feature = "apdvirt")]
+const APDVIRT_PATH: &str = "/dev/apd_virt";
 #[cfg(all(any(target_arch = "arm", target_arch = "aarch64"), feature = "gunyah"))]
 static GUNYAH_PATH: &str = "/dev/gunyah";
 
@@ -1759,6 +1762,63 @@ fn run_gz(device_path: Option<&Path>, cfg: Config, components: VmComponents) -> 
     )
 }
 
+#[cfg(all(target_arch = "aarch64", feature = "apdvirt"))]
+fn run_avt(device_path: Option<&Path>, cfg: Config, components: VmComponents) -> Result<ExitState> {
+    use devices::APDvirtKernelIrqChip;
+    use hypervisor::apdvirt::APDvirt;
+    use hypervisor::apdvirt::APDvirtVcpu;
+    use hypervisor::apdvirt::APDvirtVm;
+
+    let device_path = device_path.unwrap_or(Path::new(APDVIRT_PATH));
+    let gzvm = APDvirt::new_with_path(device_path)
+        .with_context(|| format!("failed to open APDvirt device {}", device_path.display()))?;
+
+    let arch_memory_layout =
+        Arch::arch_memory_layout(&components).context("failed to create arch memory layout")?;
+    let guest_mem = create_guest_memory(&cfg, &components, &arch_memory_layout, &gzvm)?;
+
+    #[cfg(feature = "swap")]
+    let swap_controller = if let Some(swap_dir) = cfg.swap_dir.as_ref() {
+        Some(
+            SwapController::launch(guest_mem.clone(), swap_dir, cfg.jail_config.as_ref())
+                .context("launch vmm-swap monitor process")?,
+        )
+    } else {
+        None
+    };
+
+    let vm =
+        APDvirtVm::new(&gzvm, guest_mem, components.hv_cfg).context("failed to create vm")?;
+
+    // Check that the VM was actually created in protected mode as expected.
+    if cfg.protection_type.isolates_memory() && !vm.check_capability(VmCap::Protected) {
+        bail!("Failed to create protected VM");
+    }
+    let vm_clone = vm.try_clone().context("failed to clone vm")?;
+
+    let ioapic_host_tube;
+    let mut irq_chip = match cfg.irq_chip.unwrap_or(IrqChipKind::Kernel) {
+        IrqChipKind::Split => bail!("APDvirt does not support split irqchip mode"),
+        IrqChipKind::Userspace => bail!("APDvirt does not support userspace irqchip mode"),
+        IrqChipKind::Kernel => {
+            ioapic_host_tube = None;
+            APDvirtKernelIrqChip::new(vm_clone, components.vcpu_count)
+                .context("failed to create IRQ chip")?
+        }
+    };
+
+    run_vm::<APDvirtVcpu, APDvirtVm>(
+        cfg,
+        components,
+        &arch_memory_layout,
+        vm,
+        &mut irq_chip,
+        ioapic_host_tube,
+        #[cfg(feature = "swap")]
+        swap_controller,
+    )
+}
+
 fn run_kvm(device_path: Option<&Path>, cfg: Config, components: VmComponents) -> Result<ExitState> {
     use devices::KvmKernelIrqChip;
     #[cfg(target_arch = "x86_64")]
@@ -1942,6 +2002,17 @@ fn get_default_hypervisor() -> Option<HypervisorKind> {
         }
     }
 
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    #[cfg(feature = "apdvirt")]
+    {
+        let avt_path = Path::new(APDVIRT_PATH);
+        if avt_path.exists() {
+            return Some(HypervisorKind::APDvirt {
+                device: Some(avt_path.to_path_buf()),
+            });
+        }
+    }
+
     #[cfg(all(
         unix,
         any(target_arch = "arm", target_arch = "aarch64"),
@@ -1977,6 +2048,9 @@ pub fn run_config(cfg: Config) -> Result<ExitState> {
         #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
         #[cfg(feature = "geniezone")]
         HypervisorKind::Geniezone { device } => run_gz(device.as_deref(), cfg, components),
+        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+        #[cfg(feature = "apdvirt")]
+        HypervisorKind::APDvirt { device } => run_avt(device.as_deref(), cfg, components),
         #[cfg(all(
             unix,
             any(target_arch = "arm", target_arch = "aarch64"),

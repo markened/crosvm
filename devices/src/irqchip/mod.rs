@@ -76,6 +76,11 @@ mod geniezone;
 #[cfg(all(target_arch = "aarch64", feature = "geniezone"))]
 pub use self::geniezone::GeniezoneKernelIrqChip;
 
+#[cfg(all(target_arch = "aarch64", feature = "apdvirt"))]
+mod apdvirt;
+#[cfg(all(target_arch = "aarch64", feature = "apdvirt"))]
+pub use self::apdvirt::APDvirtKernelIrqChip;
+
 pub type IrqEventIndex = usize;
 
 #[cfg(target_arch = "x86_64")]
