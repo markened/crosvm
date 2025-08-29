@@ -8,8 +8,8 @@ use base::error;
 use base::Error;
 use base::Event;
 use base::Result;
-use hypervisor::geniezone::geniezone_sys::*;
-use hypervisor::geniezone::GeniezoneVm;
+use hypervisor::apdvirt::apdvirt_sys::*;
+use hypervisor::apdvirt::APDvirtVm;
 use hypervisor::DeviceKind;
 use hypervisor::IrqRoute;
 use hypervisor::MPState;
@@ -39,11 +39,11 @@ fn default_irq_routing_table() -> Vec<IrqRoute> {
     routes
 }
 
-/// IrqChip implementation where the entire IrqChip is emulated by GZVM.
+/// IrqChip implementation where the entire IrqChip is emulated by apdvirt.
 ///
 /// This implementation will use the GZVM API to create and configure the in-kernel irqchip.
-pub struct GeniezoneKernelIrqChip {
-    pub(super) vm: GeniezoneVm,
+pub struct APDvirtKernelIrqChip {
+    pub(super) vm: APDvirtVm,
     device_kind: DeviceKind,
     pub(super) routes: Arc<Mutex<Vec<IrqRoute>>>,
 }
@@ -62,15 +62,15 @@ const AARCH64_GIC_REDIST_SIZE: u64 = 0x20000;
 // Number of SPIs (32), which is the NR_IRQS (64) minus the number of PPIs (16) and GSIs (16)
 pub const AARCH64_GIC_NR_SPIS: u32 = 32;
 
-impl GeniezoneKernelIrqChip {
+impl APDvirtKernelIrqChip {
     /// Construct a new GzvmKernelIrqchip.
-    pub fn new(vm: GeniezoneVm, num_vcpus: usize) -> Result<GeniezoneKernelIrqChip> {
+    pub fn new(vm: APDvirtVm, num_vcpus: usize) -> Result<APDvirtKernelIrqChip> {
         let dist_if_addr: u64 = AARCH64_GIC_DIST_BASE;
         let redist_addr: u64 = dist_if_addr - (AARCH64_GIC_REDIST_SIZE * num_vcpus as u64);
         let device_kind = DeviceKind::ArmVgicV3;
 
-        // prepare gzvm_create_device and call ioctl
-        let device_dis = gzvm_create_device {
+        // prepare apdvm_create_device and call ioctl
+        let device_dis = apdvm_create_device {
             dev_type: gzvm_device_type_GZVM_DEV_TYPE_ARM_VGIC_V3_DIST,
             id: 0,
             flags: 0,
@@ -80,15 +80,15 @@ impl GeniezoneKernelIrqChip {
             attr_size: 0_u64,
         };
 
-        match vm.create_geniezone_device(device_dis) {
+        match vm.create_apdvirt_device(device_dis) {
             Ok(()) => {}
             Err(e) => {
-                error!("failed to create geniezone device with err: {}", e);
+                error!("failed to create apdvirt device with err: {}", e);
                 return Err(e);
             }
         };
 
-        let device_redis = gzvm_create_device {
+        let device_redis = apdvm_create_device {
             dev_type: gzvm_device_type_GZVM_DEV_TYPE_ARM_VGIC_V3_REDIST,
             id: 0,
             flags: 0,
@@ -98,15 +98,15 @@ impl GeniezoneKernelIrqChip {
             attr_size: 0_u64,
         };
 
-        match vm.create_geniezone_device(device_redis) {
+        match vm.create_apdvirt_device(device_redis) {
             Ok(()) => {}
             Err(e) => {
-                error!("failed to create geniezone device with err: {}", e);
+                error!("failed to create apdvirt device with err: {}", e);
                 return Err(e);
             }
         };
 
-        Ok(GeniezoneKernelIrqChip {
+        Ok(APDvirtKernelIrqChip {
             vm,
             device_kind,
             routes: Arc::new(Mutex::new(default_irq_routing_table())),
@@ -114,7 +114,7 @@ impl GeniezoneKernelIrqChip {
     }
     /// Attempt to create a shallow clone of this aarch64 GzvmKernelIrqChip instance.
     pub(super) fn arch_try_clone(&self) -> Result<Self> {
-        Ok(GeniezoneKernelIrqChip {
+        Ok(APDvirtKernelIrqChip {
             vm: self.vm.try_clone()?,
             device_kind: self.device_kind,
             routes: self.routes.clone(),
@@ -122,7 +122,7 @@ impl GeniezoneKernelIrqChip {
     }
 }
 
-impl IrqChipAArch64 for GeniezoneKernelIrqChip {
+impl IrqChipAArch64 for APDvirtKernelIrqChip {
     fn try_box_clone(&self) -> Result<Box<dyn IrqChipAArch64>> {
         Ok(Box::new(self.try_clone()?))
     }
@@ -144,8 +144,8 @@ impl IrqChipAArch64 for GeniezoneKernelIrqChip {
     }
 }
 
-/// This IrqChip only works with Geniezone so we only implement it for GeniezoneVcpu.
-impl IrqChip for GeniezoneKernelIrqChip {
+/// This IrqChip only works with apdvirt so we only implement it for APDvirtVcpu.
+impl IrqChip for APDvirtKernelIrqChip {
     /// Add a vcpu to the irq chip.
     fn add_vcpu(&mut self, _vcpu_id: usize, _vcpu: &dyn Vcpu) -> Result<()> {
         Ok(())
@@ -159,13 +159,15 @@ impl IrqChip for GeniezoneKernelIrqChip {
         irq_event: &IrqEdgeEvent,
         _source: IrqEventSource,
     ) -> Result<Option<IrqEventIndex>> {
-        self.vm.register_irqfd(irq, irq_event.get_trigger(), None)?;
-        Ok(None)
+        //self.vm.register_irqfd(irq, irq_event.get_trigger(), None)?;
+        //Ok(None)
+        Err(Error::new(ENOTSUP))
     }
 
     /// Unregister an event with edge-trigger semantic for a particular GSI.
     fn unregister_edge_irq_event(&mut self, irq: u32, irq_event: &IrqEdgeEvent) -> Result<()> {
-        self.vm.unregister_irqfd(irq, irq_event.get_trigger())
+        //self.vm.unregister_irqfd(irq, irq_event.get_trigger())
+        Err(Error::new(ENOTSUP))
     }
 
     /// Register an event with level-trigger semantic that can trigger an interrupt
@@ -176,14 +178,16 @@ impl IrqChip for GeniezoneKernelIrqChip {
         irq_event: &IrqLevelEvent,
         _source: IrqEventSource,
     ) -> Result<Option<IrqEventIndex>> {
-        self.vm
+        /*self.vm
             .register_irqfd(irq, irq_event.get_trigger(), Some(irq_event.get_resample()))?;
-        Ok(None)
+        Ok(None)*/
+        Err(Error::new(ENOTSUP))
     }
 
     /// Unregister an event with level-trigger semantic for a particular GSI.
     fn unregister_level_irq_event(&mut self, irq: u32, irq_event: &IrqLevelEvent) -> Result<()> {
-        self.vm.unregister_irqfd(irq, irq_event.get_trigger())
+        //self.vm.unregister_irqfd(irq, irq_event.get_trigger())
+        Err(Error::new(ENOTSUP))
     }
 
     /// Route an IRQ line to an interrupt controller, or to a particular MSI vector.
@@ -204,7 +208,7 @@ impl IrqChip for GeniezoneKernelIrqChip {
 
     /// Return a vector of all registered irq numbers and their associated events and event
     /// indices. These should be used by the main thread to wait for irq events.
-    /// For the GeniezoneKernelIrqChip, the kernel handles listening to irq events being triggered
+    /// For the APDvirtKernelIrqChip, the kernel handles listening to irq events being triggered
     /// by devices, so this function always returns an empty Vec.
     fn irq_event_tokens(&self) -> Result<Vec<(IrqEventIndex, IrqEventSource, Event)>> {
         Ok(Vec::new())
@@ -212,7 +216,7 @@ impl IrqChip for GeniezoneKernelIrqChip {
 
     /// Either assert or deassert an IRQ line.  Sends to either an interrupt controller, or does
     /// a send_msi if the irq is associated with an MSI.
-    /// For the GeniezoneKernelIrqChip this simply calls the GZVM_SET_IRQ_LINE ioctl.
+    /// For the APDvirtKernelIrqChip this simply calls the GZVM_SET_IRQ_LINE ioctl.
     fn service_irq(&mut self, irq: u32, level: bool) -> Result<()> {
         self.vm.set_irq_line(irq, level)
     }
@@ -221,42 +225,42 @@ impl IrqChip for GeniezoneKernelIrqChip {
     /// that triggered the irq event will be read from. If the irq is associated with a resample
     /// Event, then the deassert will only happen after an EOI is broadcast for a vector
     /// associated with the irq line.
-    /// This function should never be called on GeniezoneKernelIrqChip.
+    /// This function should never be called on APDvirtKernelIrqChip.
     fn service_irq_event(&mut self, _event_index: IrqEventIndex) -> Result<()> {
-        error!("service_irq_event should never be called for GeniezoneKernelIrqChip");
+        error!("service_irq_event should never be called for APDvirtKernelIrqChip");
         Ok(())
     }
 
     /// Broadcast an end of interrupt.
-    /// This should never be called on a GeniezoneKernelIrqChip because a Geniezone vcpu should
+    /// This should never be called on a APDvirtKernelIrqChip because a APDvirt vcpu should
     /// never exit with the GZVM_EXIT_EOI_BROADCAST reason when an in-kernel irqchip exists.
     fn broadcast_eoi(&self, _vector: u8) -> Result<()> {
-        error!("broadcast_eoi should never be called for GeniezoneKernelIrqChip");
+        error!("broadcast_eoi should never be called for APDvirtKernelIrqChip");
         Ok(())
     }
 
     /// Injects any pending interrupts for `vcpu`.
-    /// For GeniezoneKernelIrqChip this is a no-op because Geniezone is responsible for injecting
+    /// For APDvirtKernelIrqChip this is a no-op because APDvirt is responsible for injecting
     /// all interrupts.
     fn inject_interrupts(&self, _vcpu: &dyn Vcpu) -> Result<()> {
         Ok(())
     }
 
     /// Notifies the irq chip that the specified VCPU has executed a halt instruction.
-    /// For GeniezoneKernelIrqChip this is a no-op because Geniezone handles VCPU blocking.
+    /// For APDvirtKernelIrqChip this is a no-op because APDvirt handles VCPU blocking.
     fn halted(&self, _vcpu_id: usize) {}
 
     /// Blocks until `vcpu` is in a runnable state or until interrupted by
     /// `IrqChip::kick_halted_vcpus`.  Returns `VcpuRunState::Runnable if vcpu is runnable, or
     /// `VcpuRunState::Interrupted` if the wait was interrupted.
-    /// For GeniezoneKernelIrqChip this is a no-op and always returns Runnable because Geniezone
+    /// For APDvirtKernelIrqChip this is a no-op and always returns Runnable because APDvirt
     /// handles VCPU blocking.
     fn wait_until_runnable(&self, _vcpu: &dyn Vcpu) -> Result<VcpuRunState> {
         Ok(VcpuRunState::Runnable)
     }
 
     /// Makes unrunnable VCPUs return immediately from `wait_until_runnable`.
-    /// For GeniezoneKernelIrqChip this is a no-op because Geniezone handles VCPU blocking.
+    /// For APDvirtKernelIrqChip this is a no-op because APDvirt handles VCPU blocking.
     fn kick_halted_vcpus(&self) {}
 
     /// Get the current MP state of the specified VCPU.
@@ -271,14 +275,14 @@ impl IrqChip for GeniezoneKernelIrqChip {
 
     /// Attempt to clone this IrqChip instance.
     fn try_clone(&self) -> Result<Self> {
-        // Because the GeniezoneKernelIrqChip struct contains arch-specific fields we leave the
+        // Because the APDvirtKernelIrqChip struct contains arch-specific fields we leave the
         // cloning to arch-specific implementations
         self.arch_try_clone()
     }
 
     /// Finalize irqchip setup. Should be called once all devices have registered irq events and
     /// been added to the io_bus and mmio_bus.
-    /// GeniezoneKernelIrqChip does not need to do anything here.
+    /// APDvirtKernelIrqChip does not need to do anything here.
     fn finalize_devices(
         &mut self,
         _resources: &mut SystemAllocator,
@@ -288,7 +292,7 @@ impl IrqChip for GeniezoneKernelIrqChip {
         Ok(())
     }
 
-    /// The GeniezoneKernelIrqChip doesn't process irq events itself so this function does nothing.
+    /// The APDvirtKernelIrqChip doesn't process irq events itself so this function does nothing.
     fn process_delayed_irq_events(&mut self) -> Result<()> {
         Ok(())
     }

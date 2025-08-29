@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-pub mod geniezone_sys;
+pub mod apdvirt_sys;
 
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
@@ -21,7 +21,7 @@ use anyhow::Context;
 use base::errno_result;
 use base::error;
 use base::ioctl;
-use base::ioctl_with_mut_ref;
+//use base::ioctl_with_mut_ref;
 use base::ioctl_with_ref;
 use base::ioctl_with_val;
 use base::pagesize;
@@ -38,13 +38,13 @@ use base::RawDescriptor;
 use base::Result;
 use base::SafeDescriptor;
 use cros_fdt::Fdt;
-pub use geniezone_sys::*;
+pub use apdvirt_sys::*;
 use libc::open;
 use libc::EFAULT;
 use libc::EINVAL;
 use libc::EIO;
 use libc::ENOENT;
-use libc::ENOMEM;
+//use libc::ENOMEM;
 use libc::ENOSPC;
 use libc::ENOTSUP;
 use libc::EOVERFLOW;
@@ -82,12 +82,12 @@ use crate::VmAArch64;
 use crate::VmCap;
 use crate::PSCI_0_2;
 
-impl Geniezone {
+impl APDvirt {
     /// Get the size of guest physical addresses (IPA) in bits.
     pub fn get_guest_phys_addr_bits(&self) -> u8 {
         // SAFETY:
-        // Safe because we know self is a real geniezone fd
-        match unsafe { ioctl_with_val(self, GZVM_CHECK_EXTENSION, GZVM_CAP_ARM_VM_IPA_SIZE.into()) }
+        // Safe because we know self is a real apdvirt fd
+        match unsafe { ioctl_with_val(self, APDVIRT_CHECK_EXTENSION, GZVM_CAP_ARM_VM_IPA_SIZE.into()) }
         {
             // Default physical address size is 40 bits if the extension is not supported.
             ret if ret <= 0 => 40,
@@ -96,17 +96,17 @@ impl Geniezone {
     }
 }
 
-impl GeniezoneVm {
-    /// Does platform specific initialization for the GeniezoneVm.
-    pub fn init_arch(&self, cfg: &Config) -> Result<()> {
-        #[cfg(target_arch = "aarch64")]
+impl APDvirtVm {
+    /// Does platform specific initialization for the APDvirtVm.
+    pub fn init_arch(&self, _cfg: &Config) -> Result<()> {
+/*         #[cfg(target_arch = "aarch64")]
         if cfg.mte {
             // SAFETY:
             // Safe because it does not take pointer arguments.
             unsafe {
                 self.ctrl_geniezone_enable_capability(GeniezoneCap::ArmMte, &[0, 0, 0, 0, 0])
             }?;
-        }
+        } */
         Ok(())
     }
 
@@ -118,19 +118,19 @@ impl GeniezoneVm {
 
     /// Arch-specific implementation of `Vm::get_pvclock`.  Always returns an error on AArch64.
     pub fn get_pvclock_arch(&self) -> Result<ClockState> {
-        // TODO: Geniezone not support pvclock currently
-        error!("Geniezone: not support get_pvclock_arch");
+        // TODO: APDvirt not support pvclock currently
+        error!("APDvirt: not support get_pvclock_arch");
         Err(Error::new(EINVAL))
     }
 
     /// Arch-specific implementation of `Vm::set_pvclock`.  Always returns an error on AArch64.
     pub fn set_pvclock_arch(&self, _state: &ClockState) -> Result<()> {
-        // TODO: Geniezone not support pvclock currently
-        error!("Geniezone: not support set_pvclock_arch");
+        // TODO: APDvirt not support pvclock currently
+        error!("APDvirt: not support set_pvclock_arch");
         Err(Error::new(EINVAL))
     }
 
-    fn get_protected_vm_info(&self) -> Result<u64> {
+/*     fn get_protected_vm_info(&self) -> Result<u64> {
         // SAFETY:
         // Safe because we allocated the struct and we know the kernel won't write beyond the end of
         // the struct or keep a pointer to it.
@@ -153,32 +153,24 @@ impl GeniezoneVm {
             )
         }?;
         Ok(())
-    }
+    } */
 }
 
-impl VmAArch64 for GeniezoneVm {
+impl VmAArch64 for APDvirtVm {
     fn get_hypervisor(&self) -> &dyn Hypervisor {
-        &self.geniezone
+        &self.apdvirt
     }
 
     fn load_protected_vm_firmware(
         &mut self,
-        fw_addr: GuestAddress,
-        fw_max_size: u64,
+        _fw_addr: GuestAddress,
+        _fw_max_size: u64,
     ) -> Result<()> {
-        let size: u64 = self.get_protected_vm_info()?;
-        if size == 0 {
-            Err(Error::new(EINVAL))
-        } else {
-            if size > fw_max_size {
-                return Err(Error::new(ENOMEM));
-            }
-            self.set_protected_vm_firmware_ipa(fw_addr)
-        }
+         Err(Error::new(ENOTSUP))
     }
 
     fn create_vcpu(&self, id: usize) -> Result<Box<dyn VcpuAArch64>> {
-        Ok(Box::new(GeniezoneVm::create_vcpu(self, id)?))
+        Ok(Box::new(APDvirtVm::create_vcpu(self, id)?))
     }
 
     fn create_fdt(&self, _fdt: &mut Fdt, _phandles: &BTreeMap<&str, u32>) -> cros_fdt::Result<()> {
@@ -207,16 +199,16 @@ impl VmAArch64 for GeniezoneVm {
     }
 }
 
-impl GeniezoneVcpu {
-    fn set_one_geniezone_reg_u64(
+impl APDvirtVcpu {
+    fn set_one_apdvirt_reg_u64(
         &self,
-        gzvm_reg_id: GeniezoneVcpuRegister,
+        gzvm_reg_id: APDvirtVcpuRegister,
         data: u64,
     ) -> Result<()> {
-        self.set_one_geniezone_reg(gzvm_reg_id, data.to_ne_bytes().as_slice())
+        self.set_one_apdvirt_reg(gzvm_reg_id, data.to_ne_bytes().as_slice())
     }
 
-    fn set_one_geniezone_reg(&self, gzvm_reg_id: GeniezoneVcpuRegister, data: &[u8]) -> Result<()> {
+    fn set_one_apdvirt_reg(&self, gzvm_reg_id: APDvirtVcpuRegister, data: &[u8]) -> Result<()> {
         let onereg = gzvm_one_reg {
             id: gzvm_reg_id.into(),
             addr: (data.as_ptr() as usize)
@@ -234,15 +226,15 @@ impl GeniezoneVcpu {
         }
     }
 
-    fn get_one_geniezone_reg_u64(&self, gzvm_reg_id: GeniezoneVcpuRegister) -> Result<u64> {
+    fn get_one_apdvirt_reg_u64(&self, gzvm_reg_id: APDvirtVcpuRegister) -> Result<u64> {
         let mut bytes = 0u64.to_ne_bytes();
-        self.get_one_geniezone_reg(gzvm_reg_id, bytes.as_mut_slice())?;
+        self.get_one_apdvirt_reg(gzvm_reg_id, bytes.as_mut_slice())?;
         Ok(u64::from_ne_bytes(bytes))
     }
 
-    fn get_one_geniezone_reg(
+    fn get_one_apdvirt_reg(
         &self,
-        gzvm_reg_id: GeniezoneVcpuRegister,
+        gzvm_reg_id: APDvirtVcpuRegister,
         data: &mut [u8],
     ) -> Result<()> {
         let onereg = gzvm_one_reg {
@@ -266,7 +258,7 @@ impl GeniezoneVcpu {
 
 #[allow(dead_code)]
 /// GZVM registers as used by the `GET_ONE_REG`/`SET_ONE_REG` ioctl API
-pub enum GeniezoneVcpuRegister {
+pub enum APDvirtVcpuRegister {
     /// General Purpose Registers X0-X30
     X(u8),
     /// Stack Pointer
@@ -277,7 +269,7 @@ pub enum GeniezoneVcpuRegister {
     Pstate,
     /// FP & SIMD Registers V0-V31
     V(u8),
-    /// Geniezone Firmware Pseudo-Registers
+    /// APDvirt Firmware Pseudo-Registers
     Firmware(u16),
     /// System Registers
     System(AArch64SysRegId),
@@ -286,8 +278,8 @@ pub enum GeniezoneVcpuRegister {
 }
 
 /// Gives the `u64` register ID expected by the `GET_ONE_REG`/`SET_ONE_REG` ioctl API.
-impl From<GeniezoneVcpuRegister> for u64 {
-    fn from(register: GeniezoneVcpuRegister) -> Self {
+impl From<APDvirtVcpuRegister> for u64 {
+    fn from(register: APDvirtVcpuRegister) -> Self {
         const fn reg(size: u64, kind: u64, fields: u64) -> u64 {
             GZVM_REG_ARM64 | size | kind | fields
         }
@@ -329,51 +321,51 @@ impl From<GeniezoneVcpuRegister> for u64 {
         }
 
         match register {
-            GeniezoneVcpuRegister::X(n @ 0..=30) => {
+            APDvirtVcpuRegister::X(n @ 0..=30) => {
                 let n = std::mem::size_of::<u64>() * (n as usize);
 
                 user_pt_reg(offset_of!(user_pt_regs, regs) + n)
             }
-            GeniezoneVcpuRegister::X(n) => {
-                unreachable!("invalid GeniezoneVcpuRegister Xn index: {n}")
+            APDvirtVcpuRegister::X(n) => {
+                unreachable!("invalid APDvirtVcpuRegister Xn index: {n}")
             }
-            GeniezoneVcpuRegister::Sp => user_pt_reg(offset_of!(user_pt_regs, sp)),
-            GeniezoneVcpuRegister::Pc => user_pt_reg(offset_of!(user_pt_regs, pc)),
-            GeniezoneVcpuRegister::Pstate => user_pt_reg(offset_of!(user_pt_regs, pstate)),
-            GeniezoneVcpuRegister::V(n @ 0..=31) => {
+            APDvirtVcpuRegister::Sp => user_pt_reg(offset_of!(user_pt_regs, sp)),
+            APDvirtVcpuRegister::Pc => user_pt_reg(offset_of!(user_pt_regs, pc)),
+            APDvirtVcpuRegister::Pstate => user_pt_reg(offset_of!(user_pt_regs, pstate)),
+            APDvirtVcpuRegister::V(n @ 0..=31) => {
                 let n = std::mem::size_of::<u128>() * (n as usize);
                 user_fpsimd_state_reg(GZVM_REG_SIZE_U128, offset_of!(user_fpsimd_state, vregs) + n)
             }
-            GeniezoneVcpuRegister::V(n) => {
-                unreachable!("invalid GeniezoneVcpuRegister Vn index: {n}")
+            APDvirtVcpuRegister::V(n) => {
+                unreachable!("invalid APDvirtVcpuRegister Vn index: {n}")
             }
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::FPSR) => {
+            APDvirtVcpuRegister::System(aarch64_sys_reg::FPSR) => {
                 user_fpsimd_state_reg(GZVM_REG_SIZE_U32, offset_of!(user_fpsimd_state, fpsr))
             }
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::FPCR) => {
+            APDvirtVcpuRegister::System(aarch64_sys_reg::FPCR) => {
                 user_fpsimd_state_reg(GZVM_REG_SIZE_U32, offset_of!(user_fpsimd_state, fpcr))
             }
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SPSR_EL1) => spsr_reg(0),
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SPSR_abt) => spsr_reg(1),
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SPSR_und) => spsr_reg(2),
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SPSR_irq) => spsr_reg(3),
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SPSR_fiq) => spsr_reg(4),
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::SP_EL1) => {
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SPSR_EL1) => spsr_reg(0),
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SPSR_abt) => spsr_reg(1),
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SPSR_und) => spsr_reg(2),
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SPSR_irq) => spsr_reg(3),
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SPSR_fiq) => spsr_reg(4),
+            APDvirtVcpuRegister::System(aarch64_sys_reg::SP_EL1) => {
                 gzvm_reg(offset_of!(gzvm_regs, sp_el1))
             }
-            GeniezoneVcpuRegister::System(aarch64_sys_reg::ELR_EL1) => {
+            APDvirtVcpuRegister::System(aarch64_sys_reg::ELR_EL1) => {
                 gzvm_reg(offset_of!(gzvm_regs, elr_el1))
             }
-            GeniezoneVcpuRegister::System(sysreg) => {
+            APDvirtVcpuRegister::System(sysreg) => {
                 reg_u64(GZVM_REG_ARM64_SYSREG.into(), sysreg.encoded().into())
             }
-            GeniezoneVcpuRegister::Firmware(n) => reg_u64(GZVM_REG_ARM, n.into()),
-            GeniezoneVcpuRegister::Ccsidr(n) => demux_reg(GZVM_REG_SIZE_U32, 0, n.into()),
+            APDvirtVcpuRegister::Firmware(n) => reg_u64(GZVM_REG_ARM, n.into()),
+            APDvirtVcpuRegister::Ccsidr(n) => demux_reg(GZVM_REG_SIZE_U32, 0, n.into()),
         }
     }
 }
 
-impl From<VcpuRegAArch64> for GeniezoneVcpuRegister {
+impl From<VcpuRegAArch64> for APDvirtVcpuRegister {
     fn from(reg: VcpuRegAArch64) -> Self {
         match reg {
             VcpuRegAArch64::X(n @ 0..=30) => Self::X(n),
@@ -386,36 +378,36 @@ impl From<VcpuRegAArch64> for GeniezoneVcpuRegister {
     }
 }
 
-impl VcpuAArch64 for GeniezoneVcpu {
+impl VcpuAArch64 for APDvirtVcpu {
     fn init(&self, _features: &[VcpuFeature]) -> Result<()> {
-        // Geniezone init vcpu in creation
+        // APDvirt init vcpu in creation
         // Return Ok since aarch64/src/lib.rs will use this
         Ok(())
     }
 
     fn init_pmu(&self, _irq: u64) -> Result<()> {
-        // TODO: Geniezone not support pmu currently
+        // TODO: APDvirt not support pmu currently
         // temporary return ok since aarch64/src/lib.rs will use this
         Ok(())
     }
 
     fn has_pvtime_support(&self) -> bool {
-        // TODO: Geniezone not support pvtime currently
+        // TODO: APDvirt not support pvtime currently
         false
     }
 
     fn init_pvtime(&self, _pvtime_ipa: u64) -> Result<()> {
-        // TODO: Geniezone not support pvtime currently
-        error!("Geniezone: not support init_pvtime");
+        // TODO: APDvirt not support pvtime currently
+        error!("APDvirt: not support init_pvtime");
         Err(Error::new(EINVAL))
     }
 
     fn set_one_reg(&self, reg_id: VcpuRegAArch64, data: u64) -> Result<()> {
-        self.set_one_geniezone_reg_u64(GeniezoneVcpuRegister::from(reg_id), data)
+        self.set_one_apdvirt_reg_u64(APDvirtVcpuRegister::from(reg_id), data)
     }
 
     fn get_one_reg(&self, reg_id: VcpuRegAArch64) -> Result<u64> {
-        self.get_one_geniezone_reg_u64(GeniezoneVcpuRegister::from(reg_id))
+        self.get_one_apdvirt_reg_u64(APDvirtVcpuRegister::from(reg_id))
     }
 
     fn set_vector_reg(&self, _reg_num: u8, _data: u128) -> Result<()> {
@@ -431,43 +423,43 @@ impl VcpuAArch64 for GeniezoneVcpu {
     }
 
     fn get_max_hw_bps(&self) -> Result<usize> {
-        // TODO: Geniezone not support gdb currently
-        error!("Geniezone: not support get_max_hw_bps");
+        // TODO: APDvirt not support gdb currently
+        error!("APDvirt: not support get_max_hw_bps");
         Err(Error::new(EINVAL))
     }
 
     fn get_system_regs(&self) -> Result<BTreeMap<AArch64SysRegId, u64>> {
-        error!("Geniezone: not support get_system_regs");
+        error!("APDvirt: not support get_system_regs");
         Err(Error::new(EINVAL))
     }
 
     fn get_cache_info(&self) -> Result<BTreeMap<u8, u64>> {
-        error!("Geniezone: not support get_cache_info");
+        error!("APDvirt: not support get_cache_info");
         Err(Error::new(EINVAL))
     }
 
     fn set_cache_info(&self, _cache_info: BTreeMap<u8, u64>) -> Result<()> {
-        error!("Geniezone: not support set_cache_info");
+        error!("APDvirt: not support set_cache_info");
         Err(Error::new(EINVAL))
     }
 
     fn hypervisor_specific_snapshot(&self) -> anyhow::Result<AnySnapshot> {
-        // TODO: Geniezone not support gdb currently
+        // TODO: APDvirt not support gdb currently
         Err(anyhow::anyhow!(
-            "Geniezone: not support hypervisor_specific_snapshot"
+            "APDvirt: not support hypervisor_specific_snapshot"
         ))
     }
 
     fn hypervisor_specific_restore(&self, _data: AnySnapshot) -> anyhow::Result<()> {
-        // TODO: Geniezone not support gdb currently
+        // TODO: APDvirt not support gdb currently
         Err(anyhow::anyhow!(
-            "Geniezone: not support hypervisor_specific_restore"
+            "APDvirt: not support hypervisor_specific_restore"
         ))
     }
 
     fn set_guest_debug(&self, _addrs: &[GuestAddress], _enable_singlestep: bool) -> Result<()> {
-        // TODO: Geniezone not support gdb currently
-        error!("Geniezone: not support set_guest_debug");
+        // TODO: APDvirt not support gdb currently
+        error!("APDvirt: not support set_guest_debug");
         Err(Error::new(EINVAL))
     }
 }
@@ -514,18 +506,18 @@ pub fn dirty_log_bitmap_size(size: usize) -> usize {
     (((size + page_size - 1) / page_size) + 7) / 8
 }
 
-pub struct Geniezone {
-    geniezone: SafeDescriptor,
+pub struct APDvirt {
+    apdvirt: SafeDescriptor,
 }
 
-#[repr(u32)]
+/* #[repr(u32)]
 pub enum GeniezoneCap {
     ArmMte,
     ArmProtectedVm = GZVM_CAP_ARM_PROTECTED_VM,
-}
+} */
 
-impl Geniezone {
-    pub fn new_with_path(device_path: &Path) -> Result<Geniezone> {
+impl APDvirt {
+    pub fn new_with_path(device_path: &Path) -> Result<APDvirt> {
         let c_path = CString::new(device_path.as_os_str().as_bytes()).unwrap();
         // SAFETY:
         // Open calls are safe because we give a nul-terminated string and verify the result.
@@ -533,16 +525,16 @@ impl Geniezone {
         if ret < 0 {
             return errno_result();
         }
-        Ok(Geniezone {
+        Ok(APDvirt {
             // SAFETY:
             // Safe because we verify that ret is valid and we own the fd.
-            geniezone: unsafe { SafeDescriptor::from_raw_descriptor(ret) },
+            apdvirt: unsafe { SafeDescriptor::from_raw_descriptor(ret) },
         })
     }
 
-    /// Opens `/dev/gzvm/` and returns a gzvm object on success.
-    pub fn new() -> Result<Geniezone> {
-        Geniezone::new_with_path(&PathBuf::from("/dev/gzvm"))
+    /// Opens `/dev/apd_virt/` and returns a adpvm object on success.
+    pub fn new() -> Result<APDvirt> {
+        APDvirt::new_with_path(&PathBuf::from("/dev/apd_virt"))
     }
 
     /// Gets the size of the mmap required to use vcpu's `gzvm_vcpu_run` structure.
@@ -553,16 +545,16 @@ impl Geniezone {
     }
 }
 
-impl AsRawDescriptor for Geniezone {
+impl AsRawDescriptor for APDvirt {
     fn as_raw_descriptor(&self) -> RawDescriptor {
-        self.geniezone.as_raw_descriptor()
+        self.apdvirt.as_raw_descriptor()
     }
 }
 
-impl Hypervisor for Geniezone {
+impl Hypervisor for APDvirt {
     fn try_clone(&self) -> Result<Self> {
-        Ok(Geniezone {
-            geniezone: self.geniezone.try_clone()?,
+        Ok(APDvirt {
+            apdvirt: self.apdvirt.try_clone()?,
         })
     }
 
@@ -576,9 +568,9 @@ impl Hypervisor for Geniezone {
     }
 }
 
-/// A wrapper around creating and using a Geniezone VM.
-pub struct GeniezoneVm {
-    geniezone: Geniezone,
+/// A wrapper around creating and using a APDvirt VM.
+pub struct APDvirtVm {
+    apdvirt: APDvirt,
     vm: SafeDescriptor,
     guest_mem: GuestMemory,
     mem_regions: Arc<Mutex<BTreeMap<MemSlot, Box<dyn MappedRegion>>>>,
@@ -586,13 +578,13 @@ pub struct GeniezoneVm {
     mem_slot_gaps: Arc<Mutex<BinaryHeap<Reverse<MemSlot>>>>,
 }
 
-impl GeniezoneVm {
-    /// Constructs a new `GeniezoneVm` using the given `Geniezone` instance.
-    pub fn new(geniezone: &Geniezone, guest_mem: GuestMemory, cfg: Config) -> Result<GeniezoneVm> {
+impl APDvirtVm {
+    /// Constructs a new `APDvirtVm` using the given `APDvirt` instance.
+    pub fn new(apdvirt: &APDvirt, guest_mem: GuestMemory, cfg: Config) -> Result<APDvirtVm> {
         // SAFETY:
         // Safe because we know gzvm is a real gzvm fd as this module is the only one that can make
         // gzvm objects.
-        let ret = unsafe { ioctl(geniezone, GZVM_CREATE_VM) };
+        let ret = unsafe { ioctl(apdvirt, GZVM_CREATE_VM) };
         if ret < 0 {
             return errno_result();
         }
@@ -623,8 +615,8 @@ impl GeniezoneVm {
             }?;
         }
 
-        let vm = GeniezoneVm {
-            geniezone: geniezone.try_clone()?,
+        let vm = APDvirtVm {
+            apdvirt: apdvirt.try_clone()?,
             vm: vm_descriptor,
             guest_mem,
             mem_regions: Arc::new(Mutex::new(BTreeMap::new())),
@@ -634,9 +626,9 @@ impl GeniezoneVm {
         Ok(vm)
     }
 
-    fn create_vcpu(&self, id: usize) -> Result<GeniezoneVcpu> {
-        // run is a data stucture shared with ko and geniezone
-        let run_mmap_size = self.geniezone.get_vcpu_mmap_size()?;
+    fn create_vcpu(&self, id: usize) -> Result<APDvirtVcpu> {
+        // run is a data stucture shared with ko and apdvirt
+        let run_mmap_size = self.apdvirt.get_vcpu_mmap_size()?;
 
         let fd =
             // SAFETY:
@@ -657,7 +649,7 @@ impl GeniezoneVm {
             .build()
             .map_err(|_| Error::new(ENOSPC))?;
 
-        Ok(GeniezoneVcpu {
+        Ok(APDvirtVcpu {
             vm: self.vm.try_clone()?,
             vcpu,
             id,
@@ -681,21 +673,21 @@ impl GeniezoneVm {
 
     /// Sets the level on the given irq to 1 if `active` is true, and 0 otherwise.
     pub fn set_irq_line(&self, irq: u32, active: bool) -> Result<()> {
-        let mut irq_level = gzvm_irq_level::default();
+        let mut irq_level = apdvm_irq_level::default();
         irq_level.__bindgen_anon_1.irq = irq;
         irq_level.level = active as u32;
 
         // SAFETY:
         // Safe because we know that our file is a VM fd, we know the kernel will only read the
         // correct amount of memory from our pointer, and we verify the return result.
-        let ret = unsafe { ioctl_with_ref(self, GZVM_IRQ_LINE, &irq_level) };
+        let ret = unsafe { ioctl_with_ref(self, APDVM_IRQ_LINE, &irq_level) };
         if ret == 0 {
             Ok(())
         } else {
             errno_result()
         }
     }
-
+/* The first version, no support eventfd
     /// Registers an event that will, when signalled, trigger the `gsi` irq, and `resample_evt`
     /// ( when not None ) will be triggered when the irqchip is resampled.
     pub fn register_irqfd(
@@ -806,8 +798,10 @@ impl GeniezoneVm {
             errno_result()
         }
     }
+*/
 
-    /// Checks whether a particular GZVM-specific capability is available for this VM.
+
+/*     /// Checks whether a particular GZVM-specific capability is available for this VM.
     fn check_raw_capability(&self, capability: GeniezoneCap) -> bool {
         let mut cap: u64 = capability as u64;
         // SAFETY:
@@ -844,13 +838,13 @@ impl GeniezoneVm {
         } else {
             errno_result()
         }
-    }
+    } */
 
-    pub fn create_geniezone_device(&self, dev: gzvm_create_device) -> Result<()> {
+    pub fn create_apdvirt_device(&self, dev: apdvm_create_device) -> Result<()> {
         // SAFETY:
         // Safe because we allocated the struct and we know the kernel will modify exactly the size
         // of the struct and the return value is checked.
-        let ret = unsafe { base::ioctl_with_ref(self, GZVM_CREATE_DEVICE, &dev) };
+        let ret = unsafe { base::ioctl_with_ref(self, APDVM_CREATE_DEVICE, &dev) };
         if ret == 0 {
             Ok(())
         } else {
@@ -872,10 +866,10 @@ impl GeniezoneVm {
     }
 }
 
-impl Vm for GeniezoneVm {
+impl Vm for APDvirtVm {
     fn try_clone(&self) -> Result<Self> {
-        Ok(GeniezoneVm {
-            geniezone: self.geniezone.try_clone()?,
+        Ok(APDvirtVm {
+            apdvirt: self.apdvirt.try_clone()?,
             vm: self.vm.try_clone()?,
             guest_mem: self.guest_mem.clone(),
             mem_regions: self.mem_regions.clone(),
@@ -884,12 +878,12 @@ impl Vm for GeniezoneVm {
     }
 
     fn try_clone_descriptor(&self) -> Result<SafeDescriptor> {
-        error!("try_clone_descriptor hasn't been tested on geniezone, returning -ENOTSUP");
+        error!("try_clone_descriptor hasn't been tested on apdvirt, returning -ENOTSUP");
         Err(Error::new(ENOTSUP))
     }
 
     fn hypervisor_kind(&self) -> HypervisorKind {
-        HypervisorKind::Geniezone
+        HypervisorKind::APDvirt
     }
 
     fn check_capability(&self, c: VmCap) -> bool {
@@ -898,9 +892,9 @@ impl Vm for GeniezoneVm {
         }
         match c {
             VmCap::ArmPmuV3 => false,
-            VmCap::DirtyLog => true,
+            VmCap::DirtyLog => false, // APDvirt not support dirty log currently
             VmCap::PvClock => false,
-            VmCap::Protected => self.check_raw_capability(GeniezoneCap::ArmProtectedVm),
+            VmCap::Protected => false,
             VmCap::EarlyInitCpuid => false,
             VmCap::ReadOnlyMemoryRegion => false,
             VmCap::MemNoncoherentDma => false,
@@ -909,7 +903,7 @@ impl Vm for GeniezoneVm {
     }
 
     fn get_guest_phys_addr_bits(&self) -> u8 {
-        self.geniezone.get_guest_phys_addr_bits()
+        self.apdvirt.get_guest_phys_addr_bits()
     }
 
     fn get_memory(&self) -> &GuestMemory {
@@ -1025,20 +1019,22 @@ impl Vm for GeniezoneVm {
 
     fn register_ioevent(
         &mut self,
-        evt: &Event,
-        addr: IoEventAddress,
-        datamatch: Datamatch,
+        _evt: &Event,
+        _addr: IoEventAddress,
+        _datamatch: Datamatch,
     ) -> Result<()> {
-        self.ioeventfd(evt, addr, datamatch, false)
+        //self.ioeventfd(evt, addr, datamatch, false)
+        Err(Error::new(ENOTSUP))
     }
 
     fn unregister_ioevent(
         &mut self,
-        evt: &Event,
-        addr: IoEventAddress,
-        datamatch: Datamatch,
+        _evt: &Event,
+        _addr: IoEventAddress,
+        _datamatch: Datamatch,
     ) -> Result<()> {
-        self.ioeventfd(evt, addr, datamatch, true)
+        //self.ioeventfd(evt, addr, datamatch, true)
+        Err(Error::new(ENOTSUP))
     }
 
     fn handle_io_events(&self, _addr: IoEventAddress, _data: &[u8]) -> Result<()> {
@@ -1093,41 +1089,41 @@ impl Vm for GeniezoneVm {
     }
 }
 
-impl AsRawDescriptor for GeniezoneVm {
+impl AsRawDescriptor for APDvirtVm {
     fn as_raw_descriptor(&self) -> RawDescriptor {
         self.vm.as_raw_descriptor()
     }
 }
 
-struct GeniezoneVcpuSignalHandle {
+struct APDvirtVcpuSignalHandle {
     run_mmap: Arc<MemoryMapping>,
 }
 
-impl VcpuSignalHandleInner for GeniezoneVcpuSignalHandle {
+impl VcpuSignalHandleInner for APDvirtVcpuSignalHandle {
     fn signal_immediate_exit(&self) {
         // SAFETY: we ensure `run_mmap` is a valid mapping of `kvm_run` at creation time, and the
         // `Arc` ensures the mapping still exists while we hold a reference to it.
         unsafe {
-            let run = self.run_mmap.as_ptr() as *mut gzvm_vcpu_run;
+            let run = self.run_mmap.as_ptr() as *mut apdvm_vcpu_run;
             (*run).immediate_exit = 1;
         }
     }
 }
 
-/// A wrapper around using a Geniezone Vcpu.
-pub struct GeniezoneVcpu {
+/// A wrapper around using a APDvirt Vcpu.
+pub struct APDvirtVcpu {
     vm: SafeDescriptor,
     vcpu: SafeDescriptor,
     id: usize,
     run_mmap: Arc<MemoryMapping>,
 }
 
-impl Vcpu for GeniezoneVcpu {
+impl Vcpu for APDvirtVcpu {
     fn try_clone(&self) -> Result<Self> {
         let vm = self.vm.try_clone()?;
         let vcpu = self.vcpu.try_clone()?;
 
-        Ok(GeniezoneVcpu {
+        Ok(APDvirtVcpu {
             vm,
             vcpu,
             id: self.id,
@@ -1147,13 +1143,13 @@ impl Vcpu for GeniezoneVcpu {
     fn set_immediate_exit(&self, exit: bool) {
         // TODO(b/315998194): Add safety comment
         #[allow(clippy::undocumented_unsafe_blocks)]
-        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut gzvm_vcpu_run) };
+        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut apdvm_vcpu_run) };
         run.immediate_exit = exit as u8;
     }
 
     fn signal_handle(&self) -> VcpuSignalHandle {
         VcpuSignalHandle {
-            inner: Box::new(GeniezoneVcpuSignalHandle {
+            inner: Box::new(APDvirtVcpuSignalHandle {
                 run_mmap: self.run_mmap.clone(),
             }),
         }
@@ -1173,7 +1169,7 @@ impl Vcpu for GeniezoneVcpu {
     fn run(&mut self) -> Result<VcpuExit> {
         // SAFETY:
         // Safe because we know that our file is a VCPU fd and we verify the return result.
-        let ret = unsafe { ioctl_with_val(self, GZVM_RUN, self.run_mmap.as_ptr() as u64) };
+        let ret = unsafe { ioctl_with_val(self, APDVM_RUN, self.run_mmap.as_ptr() as u64) };
         if ret != 0 {
             return errno_result();
         }
@@ -1181,15 +1177,15 @@ impl Vcpu for GeniezoneVcpu {
         // SAFETY:
         // Safe because we know we mapped enough memory to hold the gzvm_vcpu_run struct because the
         // kernel told us how large it was.
-        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut gzvm_vcpu_run) };
+        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut apdvm_vcpu_run) };
 
         match run.exit_reason {
-            GZVM_EXIT_MMIO => Ok(VcpuExit::Mmio),
-            GZVM_EXIT_IRQ => Ok(VcpuExit::IrqWindowOpen),
-            GZVM_EXIT_HVC => Ok(VcpuExit::Hypercall),
-            GZVM_EXIT_EXCEPTION => Err(Error::new(EINVAL)),
-            GZVM_EXIT_DEBUG => Ok(VcpuExit::Debug),
-            GZVM_EXIT_FAIL_ENTRY => {
+            APDVM_EXIT_MMIO => Ok(VcpuExit::Mmio),
+            APDVM_EXIT_IRQ => Ok(VcpuExit::IrqWindowOpen),
+            APDVM_EXIT_HVC => Ok(VcpuExit::Hypercall),
+            APDVM_EXIT_EXCEPTION => Err(Error::new(EINVAL)),
+            APDVM_EXIT_DEBUG => Ok(VcpuExit::Debug),
+            APDVM_EXIT_FAIL_ENTRY => {
                 // SAFETY:
                 // Safe because the exit_reason (which comes from the kernel) told us which
                 // union field to use.
@@ -1202,7 +1198,7 @@ impl Vcpu for GeniezoneVcpu {
                     hardware_entry_failure_reason,
                 })
             }
-            GZVM_EXIT_SYSTEM_EVENT => {
+            APDVM_EXIT_SYSTEM_EVENT => {
                 // SAFETY:
                 // Safe because the exit_reason (which comes from the kernel) told us which
                 // union field to use.
@@ -1212,15 +1208,15 @@ impl Vcpu for GeniezoneVcpu {
                     GZVM_SYSTEM_EVENT_RESET => Ok(VcpuExit::SystemEventReset),
                     GZVM_SYSTEM_EVENT_CRASH => Ok(VcpuExit::SystemEventCrash),
                     _ => {
-                        error!("Unknown GZVM system event {}", event_type);
+                        error!("Unknown APDVM system event {}", event_type);
                         Err(Error::new(EINVAL))
                     }
                 }
             }
-            GZVM_EXIT_INTERNAL_ERROR => Ok(VcpuExit::InternalError),
-            GZVM_EXIT_SHUTDOWN => Ok(VcpuExit::Shutdown(Ok(()))),
-            GZVM_EXIT_UNKNOWN => panic!("unknown gzvm exit reason\n"),
-            r => panic!("unknown gzvm exit reason: {}", r),
+            APDVM_EXIT_INTERNAL_ERROR => Ok(VcpuExit::InternalError),
+            APDVM_EXIT_SHUTDOWN => Ok(VcpuExit::Shutdown(Ok(()))),
+            APDVM_EXIT_UNKNOWN => panic!("unknown apdvm exit reason\n"),
+            r => panic!("unknown apdvm exit reason: {}", r),
         }
     }
 
@@ -1229,10 +1225,10 @@ impl Vcpu for GeniezoneVcpu {
         // Safe because we know we mapped enough memory to hold the gzvm_vcpu_run struct because the
         // kernel told us how large it was. The pointer is page aligned so casting to a different
         // type is well defined, hence the clippy allow attribute.
-        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut gzvm_vcpu_run) };
+        let run = unsafe { &mut *(self.run_mmap.as_ptr() as *mut apdvm_vcpu_run) };
 
         // Verify that the handler is called in the right context.
-        assert!(run.exit_reason == GZVM_EXIT_MMIO);
+        assert!(run.exit_reason == APDVM_EXIT_MMIO);
         // SAFETY:
         // Safe because the exit_reason (which comes from the kernel) told us which
         // union field to use.
@@ -1258,7 +1254,7 @@ impl Vcpu for GeniezoneVcpu {
     }
 }
 
-impl AsRawDescriptor for GeniezoneVcpu {
+impl AsRawDescriptor for APDvirtVcpu {
     fn as_raw_descriptor(&self) -> RawDescriptor {
         self.vcpu.as_raw_descriptor()
     }
