@@ -837,11 +837,17 @@ fn create_virtio_devices(
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     {
         if cfg.vhost_scmi {
-            devs.push(create_vhost_scmi_device(
-                cfg.protection_type,
-                cfg.jail_config.as_ref(),
-                cfg.vhost_scmi_device.clone(),
-            )?);
+            let mut paths = cfg.vhost_scmi_devices.clone();
+            if paths.is_empty() {
+                paths.push(cfg.vhost_scmi_device.clone());
+            }
+            for path in paths {
+                devs.push(create_vhost_scmi_device(
+                    cfg.protection_type,
+                    cfg.jail_config.as_ref(),
+                    path,
+                )?);
+            }
         }
     }
 

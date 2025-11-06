@@ -180,3 +180,36 @@ crosvm run --cfg vm.json --kernel /path/to/another/bzImage
 
 Then the loaded kernel will be `/path/to/another/bzImage`, and the `kernel` option in the
 configuration file will become a no-op.
+
+## Device-Specific Options
+
+### vhost-scmi devices (ARM/AArch64 Linux/Android)
+
+The `--vhost-scmi` switch enables vhost SCMI device support, and the `--vhost-scmi-devices` option allows you to add multiple SCMI device paths. This option is repeatable.
+
+**Command-line usage:**
+
+```sh
+# Single SCMI device (uses default /dev/vhost-scmi)
+crosvm run --vhost-scmi ...
+
+# Multiple SCMI devices
+crosvm run --vhost-scmi \
+    --vhost-scmi-devices /dev/vhost-scmi0 \
+    --vhost-scmi-devices /dev/vhost-scmi1 \
+    ...
+```
+
+**Configuration file usage:**
+
+```json
+{
+    "vhost_scmi": true,
+    "vhost_scmi_devices": [
+        "/dev/vhost-scmi0",
+        "/dev/vhost-scmi1"
+    ]
+}
+```
+
+If `vhost_scmi_devices` is empty or not specified, the system falls back to using the single `vhost_scmi_device` path (which defaults to `/dev/vhost-scmi`).

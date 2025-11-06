@@ -2587,6 +2587,14 @@ pub struct RunCommand {
     /// use vhost for scmi
     pub vhost_scmi: Option<bool>,
 
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    #[argh(option, arg_name = "PATH")]
+    #[serde(default)]
+    #[merge(strategy = append)]
+    /// add a vhost SCMI device path; repeat to add multiple SCMI devices
+    pub vhost_scmi_devices: Vec<PathBuf>,
+
     #[argh(
         option,
         arg_name = "[type=]TYPE,socket=SOCKET_PATH[,max-queue-size=NUM][,pci-address=ADDR]"
@@ -3233,6 +3241,7 @@ impl TryFrom<RunCommand> for super::config::Config {
         #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
         {
             cfg.vhost_scmi = cmd.vhost_scmi.unwrap_or_default();
+            cfg.vhost_scmi_devices = cmd.vhost_scmi_devices;
         }
 
         #[cfg(feature = "vtpm")]

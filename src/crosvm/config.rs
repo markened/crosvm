@@ -771,6 +771,9 @@ pub struct Config {
     #[cfg(any(target_os = "android", target_os = "linux"))]
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     pub vhost_scmi_device: PathBuf,
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    pub vhost_scmi_devices: Vec<PathBuf>,
     pub vhost_user: Vec<VhostUserFrontendOption>,
     pub vhost_user_connect_timeout_ms: Option<u64>,
     #[cfg(feature = "video-decoder")]
@@ -1007,6 +1010,9 @@ impl Default for Config {
             #[cfg(any(target_os = "android", target_os = "linux"))]
             #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
             vhost_scmi_device: PathBuf::from(VHOST_SCMI_PATH),
+            #[cfg(any(target_os = "android", target_os = "linux"))]
+            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+            vhost_scmi_devices: Vec::new(),
             vhost_user: Vec::new(),
             vhost_user_connect_timeout_ms: None,
             vsock: None,
