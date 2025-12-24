@@ -733,3 +733,58 @@ pub unsafe extern "C" fn rutabaga_restore(ptr: &mut rutabaga, dir: *const c_char
     }))
     .unwrap_or(-ESRCH)
 }
+
+/// Captures a screenshot of the last posted frame.
+///
+/// # Safety
+/// - `pixels_out` must be a valid pointer that will receive a malloc'd buffer pointer.
+/// - The caller is responsible for freeing the returned buffer using `free()`.
+/// - `width_out`, `height_out`, and `size_out` must be valid pointers to receive output values.
+///
+/// # Returns
+/// - 0 on success
+/// - negative error code on failure
+///
+/// On success, `pixels_out` will point to a malloc'd buffer containing RGBA pixel data,
+/// and `size_out` will contain the buffer size in bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rutabaga_get_screenshot(
+    ptr: &rutabaga,
+    width_out: *mut u32,
+    height_out: *mut u32,
+    size_out: *mut u64,
+    pixels_out: *mut *mut u8,
+) -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        if width_out.is_null() || height_out.is_null() || size_out.is_null() || pixels_out.is_null() {
+            return -EINVAL;
+        }
+
+        let result = ptr.get_screenshot();
+        let pixels = return_on_error!(result);
+
+        let size = pixels.len() as u64;
+        if size == 0 {
+            return -EINVAL;
+        }
+
+        // Allocate memory using libc malloc so it can be freed by C code
+        let buffer = libc::malloc(size as libc::size_t) as *mut u8;
+        if buffer.is_null() {
+            return -EINVAL;
+        }
+
+        // Copy pixel data to the allocated buffer
+        copy_nonoverlapping(pixels.as_ptr(), buffer, size as usize);
+
+        // Return width/height as 0 for now since we only have pixel data
+        // The actual implementation in gfxstream will fill these properly
+        *width_out = 0;
+        *height_out = 0;
+        *size_out = size;
+        *pixels_out = buffer;
+
+        NO_ERROR
+    }))
+    .unwrap_or(-ESRCH)
+}

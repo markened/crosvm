@@ -17,6 +17,7 @@ mod rutabaga_2d;
 mod rutabaga_core;
 mod rutabaga_gralloc;
 mod rutabaga_utils;
+mod screenshot;
 mod snapshot;
 mod virgl_renderer;
 
@@ -30,6 +31,8 @@ pub use mesa3d_util::RawDescriptor as RutabagaRawDescriptor;
 pub use mesa3d_util::MESA_HANDLE_TYPE_MEM_DMABUF as RUTABAGA_HANDLE_TYPE_MEM_DMABUF;
 pub use mesa3d_util::MESA_HANDLE_TYPE_MEM_OPAQUE_FD as RUTABAGA_HANDLE_TYPE_MEM_OPAQUE_FD;
 
+#[cfg(feature = "gfxstream")]
+pub use crate::gfxstream::Screenshot;
 pub use crate::rutabaga_core::calculate_capset_mask;
 pub use crate::rutabaga_core::calculate_capset_names;
 pub use crate::rutabaga_core::Rutabaga;
@@ -41,3 +44,4 @@ pub use crate::rutabaga_gralloc::RutabagaGralloc;
 pub use crate::rutabaga_gralloc::RutabagaGrallocBackendFlags;
 pub use crate::rutabaga_gralloc::RutabagaGrallocFlags;
 pub use crate::rutabaga_utils::*;
+pub use crate::screenshot::*;

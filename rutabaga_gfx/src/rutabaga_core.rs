@@ -330,6 +330,12 @@ pub trait RutabagaComponent {
     fn resume(&self) -> RutabagaResult<()> {
         Ok(())
     }
+
+    /// Implementations should capture a screenshot of the last posted frame.
+    /// Returns screenshot data as RGBA/RGB pixels. Default implementation returns Unsupported.
+    fn get_screenshot(&self) -> RutabagaResult<Vec<u8>> {
+        Err(MesaError::Unsupported.into())
+    }
 }
 
 pub trait RutabagaContext {
@@ -1180,6 +1186,12 @@ impl Rutabaga {
         }
 
         Ok(())
+    }
+
+    /// Captures a screenshot of the last posted frame.
+    /// Returns RGBA/RGB pixel data in a Vec<u8>.
+    pub fn get_screenshot(&self) -> RutabagaResult<Vec<u8>> {
+        self.component.get_screenshot()
     }
 }
 

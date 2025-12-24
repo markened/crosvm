@@ -106,6 +106,14 @@ pub type stream_renderer_fence = RutabagaFence;
 #[allow(non_camel_case_types)]
 pub type stream_renderer_debug = RutabagaDebug;
 
+/// Screenshot data captured from gfxstream.
+pub struct Screenshot {
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub pixels: Vec<u8>,
+}
+
 #[cfg(gfxstream_unstable)]
 #[repr(C)]
 pub struct stream_renderer_3d_info {
@@ -236,6 +244,15 @@ extern "C" {
         res_handle: u32,
         import_handle: *const stream_renderer_handle,
         import_data: *const stream_renderer_import_data,
+    ) -> c_int;
+
+    // Screenshot capture function
+    fn stream_renderer_get_screenshot(
+        width: *mut u32,
+        height: *mut u32,
+        format: *mut u32,
+        pixels: *mut *mut u8,
+        size: *mut u64,
     ) -> c_int;
 }
 
@@ -516,6 +533,50 @@ impl Gfxstream {
             os_handle: handle,
             handle_type: stream_handle.handle_type,
         }))
+    }
+
+    /// Captures a screenshot of the last posted frame from gfxstream.
+    pub fn capture_screenshot(&self) -> RutabagaResult<Screenshot> {
+        let mut width: u32 = 0;
+        let mut height: u32 = 0;
+        let mut format: u32 = 0;
+        let mut pixels_ptr: *mut u8 = null_mut();
+        let mut size: u64 = 0;
+
+        // SAFETY:
+        // Safe because we provide valid pointers to stack variables and check the return value.
+        let ret = unsafe {
+            stream_renderer_get_screenshot(
+                &mut width,
+                &mut height,
+                &mut format,
+                &mut pixels_ptr,
+                &mut size,
+            )
+        };
+        ret_to_res(ret)?;
+
+        if pixels_ptr.is_null() || size == 0 {
+            return Err(RutabagaError::SpecViolation("screenshot returned null data"));
+        }
+
+        // SAFETY:
+        // Safe because gfxstream allocated this memory and we're creating a Vec to own it.
+        // The pixels_ptr is valid for 'size' bytes as returned by gfxstream.
+        let pixels = unsafe {
+            let slice = std::slice::from_raw_parts(pixels_ptr, size as usize);
+            let vec = slice.to_vec();
+            // Free the original memory allocated by gfxstream (assuming C-style malloc)
+            libc::free(pixels_ptr as *mut libc::c_void);
+            vec
+        };
+
+        Ok(Screenshot {
+            width,
+            height,
+            format,
+            pixels,
+        })
     }
 }
 
@@ -979,5 +1040,10 @@ impl RutabagaComponent for Gfxstream {
         let ret = unsafe { stream_renderer_resume() };
         ret_to_res(ret)?;
         Ok(())
+    }
+
+    fn get_screenshot(&self) -> RutabagaResult<Vec<u8>> {
+        let screenshot = self.capture_screenshot()?;
+        Ok(screenshot.pixels)
     }
 }

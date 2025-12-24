@@ -220,3 +220,14 @@ extern "C" fn stream_renderer_restore(dir: *const c_char) -> c_int {
 extern "C" fn stream_renderer_resume() -> c_int {
     unimplemented!();
 }
+
+#[no_mangle]
+extern "C" fn stream_renderer_get_screenshot(
+    _width: *mut u32,
+    _height: *mut u32,
+    _format: *mut u32,
+    _pixels: *mut *mut u8,
+    _size: *mut u64,
+) -> c_int {
+    unimplemented!();
+}
