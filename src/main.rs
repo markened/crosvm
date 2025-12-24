@@ -620,12 +620,20 @@ fn gpu_set_display_mouse_mode(cmd: cmdline::GpuSetDisplayMouseModeCommand) -> Mo
 }
 
 #[cfg(feature = "gpu")]
+fn gpu_screenshot(cmd: cmdline::GpuScreenshotCommand) -> std::result::Result<String, String> {
+    // For now, return an error message that this requires VM integration
+    // In a real implementation, this would communicate with the VM via socket
+    Err("Screenshot functionality requires VM runtime integration. This command is a placeholder for the API.".to_string())
+}
+
+#[cfg(feature = "gpu")]
 fn modify_gpu(cmd: cmdline::GpuCommand) -> std::result::Result<(), ()> {
     let result = match cmd.command {
         cmdline::GpuSubCommand::AddDisplays(cmd) => gpu_display_add(cmd),
         cmdline::GpuSubCommand::ListDisplays(cmd) => gpu_display_list(cmd),
         cmdline::GpuSubCommand::RemoveDisplays(cmd) => gpu_display_remove(cmd),
         cmdline::GpuSubCommand::SetDisplayMouseMode(cmd) => gpu_set_display_mouse_mode(cmd),
+        cmdline::GpuSubCommand::Screenshot(cmd) => gpu_screenshot(cmd),
     };
     match result {
         Ok(response) => {

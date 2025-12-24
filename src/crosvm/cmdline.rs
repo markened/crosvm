@@ -602,6 +602,7 @@ pub enum GpuSubCommand {
     ListDisplays(GpuListDisplaysCommand),
     RemoveDisplays(GpuRemoveDisplaysCommand),
     SetDisplayMouseMode(GpuSetDisplayMouseModeCommand),
+    Screenshot(GpuScreenshotCommand),
 }
 
 #[cfg(feature = "gpu")]
@@ -652,6 +653,19 @@ pub struct GpuSetDisplayMouseModeCommand {
     #[argh(option)]
     /// display mouse mode
     pub mouse_mode: GpuMouseMode,
+    #[argh(positional, arg_name = "VM_SOCKET")]
+    /// VM Socket path
+    pub socket_path: String,
+}
+
+#[cfg(feature = "gpu")]
+#[derive(FromArgs)]
+/// Capture a screenshot from the GPU device.
+#[argh(subcommand, name = "screenshot")]
+pub struct GpuScreenshotCommand {
+    #[argh(option)]
+    /// output file path (PPM format)
+    pub output: PathBuf,
     #[argh(positional, arg_name = "VM_SOCKET")]
     /// VM Socket path
     pub socket_path: String,

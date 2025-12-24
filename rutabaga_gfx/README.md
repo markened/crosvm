@@ -142,3 +142,60 @@ if it works or we fall flat on our face.
 <!-- Image from Mesa MR -->
 
 ![magma diagram](images/magma.png)
+
+# Screenshot Capture Support
+
+Rutabaga VGI now supports screenshot capture functionality for debugging and testing purposes. This 
+feature allows capturing the last posted frame from gfxstream-based GPU virtualization.
+
+## API Usage
+
+### Rust API
+
+```rust
+use rutabaga_gfx::{Rutabaga, RutabagaBuilder, write_ppm_rgba};
+use std::path::Path;
+
+// After initializing Rutabaga with gfxstream...
+let screenshot_pixels = rutabaga.get_screenshot()?;
+
+// Save to PPM file (assuming RGBA format, 1920x1080)
+write_ppm_rgba(Path::new("screenshot.ppm"), 1920, 1080, &screenshot_pixels)?;
+```
+
+### C API
+
+```c
+#include <rutabaga_gfx_ffi.h>
+
+uint32_t width = 0;
+uint32_t height = 0;
+uint64_t size = 0;
+uint8_t* pixels = NULL;
+
+int ret = rutabaga_get_screenshot(rutabaga_ptr, &width, &height, &size, &pixels);
+if (ret == 0) {
+    // Process pixels (RGBA format)
+    // ...
+    // Free the allocated buffer
+    free(pixels);
+}
+```
+
+## CLI Usage
+
+```sh
+# Capture screenshot from running VM
+crosvm gpu screenshot --output screenshot.ppm /path/to/vm.sock
+```
+
+Note: The CLI command requires integration with a running VM instance and is currently a placeholder
+for the full implementation.
+
+## Implementation Details
+
+- Screenshot data is returned as RGBA pixel data
+- PPM format is used for simple, portable image files
+- The C API allocates memory using malloc() that must be freed by the caller
+- Thread-safety is ensured through gfxstream's internal synchronization
+

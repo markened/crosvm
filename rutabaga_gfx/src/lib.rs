@@ -18,6 +18,8 @@ mod rutabaga_core;
 mod rutabaga_gralloc;
 mod rutabaga_utils;
 mod screenshot;
+#[cfg(test)]
+mod screenshot_tests;
 mod snapshot;
 mod virgl_renderer;
 
